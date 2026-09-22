@@ -1,0 +1,16 @@
+# Bundle patch for dsh-chat-wide.
+#
+# The DSH profile applies every installed bundle's patch on top of the profile
+# tree, so this file is the whole installation contract: one `insert` row keyed
+# by the package id. `config` carries the transcript width; omit it to accept the
+# schema default (95 percent).
+#
+# Layer order for reference: bundle patches -> profiles/<profile>/cordis.patch.yml
+# -> ~/.dsh/cordis.patch.yml -> --patch overlay. A profile-level row with the
+# same id overrides this one, and `~/.dsh/cordis.patch.yml` can disable it with
+# `disabled: true` instead of uninstalling the package.
+- insert:
+    - id: dsh-chat-wide
+      name: 'dsh-chat-wide'
+      config:
+        widthPercent: 95

@@ -1,0 +1,68 @@
+{
+  "name": "dsh-chat-wide",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH Web plugin that pins only the main conversation transcript column to a configurable percentage width.",
+  "license": "MIT",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "src"
+  ],
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "cordis",
+    "chat",
+    "transcript"
+  ],
+  "scripts": {
+    "build": "pnpm run build:host && pnpm run build:client",
+    "build:host": "tsc -p tsconfig.json",
+    "build:client": "tsc -p tsconfig.client.json && tsdown --config tsdown.config.ts",
+    "check": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.client.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:unit": "vitest run test/unit",
+    "test:client": "vitest run test/client"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4.0.2",
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.5-rc.1",
+    "@deepseek-ai/schemastery": ">=3.18.2"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "link:../deepseek-harness/vendor/cordis",
+    "@deepseek-ai/dsh-host-webserver": "link:../deepseek-harness/packages/host/webserver",
+    "@deepseek-ai/schemastery": "link:../deepseek-harness/vendor/schemastery",
+    "@types/node": "^22.20.0",
+    "jsdom": "^29.1.1",
+    "tsdown": "link:../deepseek-harness/node_modules/tsdown",
+    "typescript": "^5.9.0",
+    "vitest": "^4.1.8"
+  }
+}
