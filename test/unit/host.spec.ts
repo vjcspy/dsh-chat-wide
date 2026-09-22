@@ -53,8 +53,8 @@ interface HostHarness {
 }
 
 /**
- * Minimal Cordis host context: `ctx.on` and `ctx.get` are the only members this
- * plugin uses, plus the one settings method it calls.
+ * Minimal Cordis host context: `ctx.on` and `ctx.inject` are the only members
+ * this plugin uses, plus the one settings method it calls.
  * @param withSettings - whether a settings provider is mounted on the context.
  * @returns The fake context plus the drivers above.
  */
@@ -76,7 +76,14 @@ function createContext(withSettings: boolean): HostHarness {
     },
   }
   const ctx = {
-    get: (name: string) => name === 'settings' && withSettings ? settings : undefined,
+    // Acquiring an optional service: the callback runs only once a provider is
+    // composed, so an absent provider leaves the sub-fiber parked and the rest of
+    // `apply` untouched.
+    inject: (names: string[], callback: (sub: { settings: typeof settings }) => void) => {
+      expect(names).toEqual(['settings'])
+      if (withSettings) callback({ settings })
+      return {}
+    },
     on: (event: string, handler: (table: InjectionRow[]) => void) => {
       expect(event).toBe('webserver/index-inject')
       handlers.push(handler)
@@ -97,6 +104,57 @@ function createContext(withSettings: boolean): HostHarness {
     installed: () => installed,
     commit: (widthPercent) => { section().hooks.setSource(() => ({ widthPercent })) },
     detach: () => { section().hooks.setSource(() => section().entry) },
+  }
+}
+
+/**
+ * Host context whose settings provider composes after `apply` has run — the real
+ * boot order that produced the registration regression this covers.
+ * @returns The fake context plus a `mount` driver for the late provider.
+ */
+function createDeferredContext(): {
+  ctx: Context
+  mount: () => void
+  installed: () => InstalledSection | undefined
+  render: () => InjectionRow[]
+} {
+  const handlers: Array<(table: InjectionRow[]) => void> = []
+  let pending: ((sub: { settings: unknown }) => void) | undefined
+  let installed: InstalledSection | undefined
+  const settings = {
+    installSection: (
+      owner: unknown,
+      ns: string,
+      schema: unknown,
+      entry: ConfigShape,
+      hooks: SectionHooks,
+    ): void => {
+      installed = { owner, ns, schema, entry, hooks }
+      hooks.setSource(() => entry)
+      hooks.onChange()
+    },
+  }
+  const ctx = {
+    inject: (names: string[], callback: (sub: { settings: unknown }) => void) => {
+      expect(names).toEqual(['settings'])
+      pending = callback
+      return {}
+    },
+    on: (event: string, handler: (table: InjectionRow[]) => void) => {
+      expect(event).toBe('webserver/index-inject')
+      handlers.push(handler)
+      return () => {}
+    },
+  } as unknown as Context
+  return {
+    ctx,
+    mount: () => { pending?.({ settings }) },
+    installed: () => installed,
+    render: () => {
+      const table: InjectionRow[] = []
+      for (const handler of handlers) handler(table)
+      return table
+    },
   }
 }
 
@@ -160,6 +218,21 @@ describe('host settings wiring', () => {
     apply(ctx, { widthPercent: 80 })
     expect(installed()).toBeUndefined()
     expect(render()).toEqual([{ kind: 'global', name: CONFIG_GLOBAL, value: { widthPercent: 80 } }])
+  })
+
+  it('registers the section when the provider composes after apply', () => {
+    // Regression: acquiring the service once with `ctx.get` at apply time missed a
+    // provider that mounted later, so the namespace stayed unregistered and every
+    // Settings write was refused while the seed default masked the failure.
+    const { ctx, mount, installed, render } = createDeferredContext()
+    apply(ctx, { widthPercent: 88 })
+    expect(installed()).toBeUndefined()
+    expect(render()).toEqual([{ kind: 'global', name: CONFIG_GLOBAL, value: { widthPercent: 88 } }])
+    mount()
+    const section = installed()
+    expect(section?.ns).toBe(SETTINGS_NAMESPACE)
+    expect(section?.entry).toEqual({ widthPercent: 88 })
+    expect(render()).toEqual([{ kind: 'global', name: CONFIG_GLOBAL, value: { widthPercent: 88 } }])
   })
 
   it('publishes the committed settings value in preference to the Loader config', () => {
