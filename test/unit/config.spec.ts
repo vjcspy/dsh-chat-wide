@@ -10,10 +10,14 @@ import { Config } from '../../src/schema.ts'
 import {
   CONFIG_GLOBAL,
   DEFAULT_WIDTH_PERCENT,
+  isValidWidthPercent,
   PLUGIN_ID,
   resolveWidthPercent,
+  SETTINGS_NAMESPACE,
+  WIDTH_PERCENT_FIELD,
   WIDTH_PERCENT_MAX,
   WIDTH_PERCENT_MIN,
+  WIDTH_PERCENT_STEP,
 } from '../../src/config.ts'
 
 /**
@@ -41,6 +45,56 @@ describe('plugin identity', () => {
     expect(DEFAULT_WIDTH_PERCENT).toBe(95)
     expect(WIDTH_PERCENT_MIN).toBe(1)
     expect(WIDTH_PERCENT_MAX).toBe(100)
+  })
+
+  it('pins the accepted step to the schema resolution', () => {
+    // The Settings input quantizes with this constant, so a change here is a
+    // change to the write path as well as to validation.
+    expect(WIDTH_PERCENT_STEP).toBe(0.01)
+  })
+
+  it('keeps the settings namespace and field stable', () => {
+    // The Host registers this namespace and the browser half binds this exact
+    // string; a mismatch leaves the scope `unavailable` and the row read-only.
+    expect(SETTINGS_NAMESPACE).toBe('dsh-chat-wide')
+    expect(SETTINGS_NAMESPACE).toBe(PLUGIN_ID)
+    expect(WIDTH_PERCENT_FIELD).toBe('widthPercent')
+  })
+
+  it('names the settings field identically to the configuration field', () => {
+    // One home for the field name: the namespace section and the injected global
+    // both carry `widthPercent`, so a rename cannot split the two carriers.
+    const wired: ConfigShape = { [WIDTH_PERCENT_FIELD]: 95 }
+    expect(parse(wired)).toEqual({ widthPercent: 95 })
+  })
+})
+
+describe('isValidWidthPercent', () => {
+  it('accepts in-range finite numbers', () => {
+    for (const value of [1, 50, 95, 100, 12.5]) {
+      expect(isValidWidthPercent(value)).toBe(true)
+    }
+  })
+
+  it('rejects out-of-range, non-finite, and non-number values', () => {
+    for (const value of [
+      0,
+      0.5,
+      100.5,
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      '95',
+      null,
+      undefined,
+      true,
+      {},
+      [],
+      () => 95,
+    ]) {
+      expect(isValidWidthPercent(value)).toBe(false)
+    }
   })
 })
 

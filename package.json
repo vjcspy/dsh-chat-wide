@@ -53,14 +53,29 @@
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.2",
     "@deepseek-ai/dsh-host-webserver": ">=0.1.5-rc.1",
+    "@deepseek-ai/dsh-settings": ">=0.1.5-rc.1",
     "@deepseek-ai/schemastery": ">=3.18.2"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-settings": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "link:../deepseek-harness/vendor/cordis",
+    "@deepseek-ai/dsh-client-locale": "link:../deepseek-harness/packages/client/locale",
+    "@deepseek-ai/dsh-client-store": "link:../deepseek-harness/packages/client/store",
+    "@deepseek-ai/dsh-client-ui-primitives": "link:../deepseek-harness/packages/client/ui-primitives",
+    "@deepseek-ai/dsh-client-ui-renderer": "link:../deepseek-harness/packages/client/ui-renderer",
+    "@deepseek-ai/dsh-client-ui-settings": "link:../deepseek-harness/packages/client/ui-settings",
+    "@deepseek-ai/dsh-client-ui-slots": "link:../deepseek-harness/packages/client/ui-slots",
     "@deepseek-ai/dsh-host-webserver": "link:../deepseek-harness/packages/host/webserver",
+    "@deepseek-ai/dsh-settings": "link:../deepseek-harness/packages/settings/settings",
     "@deepseek-ai/schemastery": "link:../deepseek-harness/vendor/schemastery",
     "@types/node": "^22.20.0",
+    "@types/react": "~18.3.1",
     "jsdom": "^29.1.1",
+    "react": "^18.2.0",
     "tsdown": "link:../deepseek-harness/node_modules/tsdown",
     "typescript": "^5.9.0",
     "vitest": "^4.1.8"

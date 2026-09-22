@@ -4,6 +4,10 @@ External [Cordis](https://deepseek-harness.github.io/deepseek-harness/) plugin f
 **only the main conversation transcript column** to a configurable percentage of its available width
 (default **95%**), so the message flow no longer sits in a narrow band in the middle of the pane.
 
+The width is adjustable at runtime from **Settings → General → Transcript width**, applies live with no
+reload, and is persisted so it survives a restart. The cordis plugin `config` remains available as a seed
+layer for a deployment that wants a different starting point.
+
 Nothing in `deepseek-harness` changes: the plugin overrides one `max-width` declaration through a
 lifecycle-owned stylesheet.
 
@@ -27,13 +31,54 @@ lifecycle-owned stylesheet.
 
 ## Configuration
 
-The Host half validates the width and injects it into every served page through
-`webserver/index-inject`; the browser half reads and **re-validates** it from the page global, falling back to
-the validated default when it is absent or malformed.
+The width has **three layers**, resolved in this order — the first one that supplies a valid value wins:
+
+| # | Layer | Where it comes from | Role |
+| --- | --- | --- | --- |
+| 1 | **User setting** | Settings → General → *Transcript width* (`dsh-chat-wide.widthPercent`) | Live value; overrides everything below |
+| 2 | **Cordis `config` seed** | the plugin row's `config.widthPercent` in a `cordis.patch.yml` | Composition seed, published as the namespace's `base` layer |
+| 3 | **Schema default** | `95` | Applied when neither layer above supplies a value |
 
 | Field | Type | Default | Bounds |
 | --- | --- | --- | --- |
 | `widthPercent` | number | `95` | `1` – `100`, step `0.01` |
+
+### The Settings control
+
+The plugin contributes one row to the General Settings page — the same page that owns *Appearance*,
+*Font size*, and *Transcript view*. It registers into the `settings.general.item` slot as id `chat-wide`
+at order `13`, just after `transcript-view` (12).
+
+The row is a numeric input. It commits on **blur** and on **Enter**; a value outside `1`–`100` is clamped
+into range, and an empty or unparseable box is ignored, so an out-of-range or `NaN` value can never reach
+the store. A typed value is quantized to the `0.01` step, because the namespace's own schema refuses a
+finer one — writing it would fail the mutation instead of moving the transcript. The displayed value
+always follows the persisted setting, never the keystroke echo.
+
+The row's copy comes from dictionaries owned by this plugin (`src/client/locales/`), bound in `apply()` and
+passed through the slot registration's inject face: an external plugin cannot merge the renderer-visible
+locale namespace, so it cannot use the framework `t` seat.
+
+### Where the value is persisted
+
+Writes go through the settings provider, which persists the user layer to `settings.yaml` under the
+harness home (`$DSH_HOME`, default `~/.dsh/settings.yaml`) — the machine-wide store the other General rows
+use. The setting therefore **survives restarts** and applies to every profile.
+
+### The injected global is only a first-paint seed
+
+The Host still publishes `__DSH_CHAT_WIDE_CONFIG__` through `webserver/index-inject`, but it now reads the
+**settings scope at emit time** rather than a frozen config object, so the seed reflects the current
+setting. It is not the live value: the browser half binds the `dsh-chat-wide` namespace directly and
+re-renders its stylesheet on every change, so a Settings write moves the transcript with no reload. A page
+that loaded before the settings transport answered still shows the right width, because the resolution
+order in the browser is **live settings section → injected global → schema default**.
+
+Under `desktop-host` and `webworker-runtime` the index-injection table is captured once at boot, so the
+plugin must already be active there for the seed to appear — the browser half's own namespace binding still
+supplies the live value.
+
+### Seeding the cordis config layer
 
 ```yaml
 # cordis.patch.yml, profile patch, or ~/.dsh/cordis.patch.yml
@@ -44,14 +89,14 @@ the validated default when it is absent or malformed.
         widthPercent: 92
 ```
 
-An out-of-range value fails at plugin load (the schema rejects it) instead of silently degrading the layout.
-`NaN` is rejected too: the range check is paired with a `0.01` step, because `min`/`max` compare with `<`/`>`
-and both report false for `NaN`.
+This row is a **seed**, not the final value: a width the user later picks in Settings wins over it. An
+out-of-range seed fails at plugin load (the schema rejects it) instead of silently degrading the layout.
+`NaN` is rejected too: the range check is paired with a `0.01` step, because `min`/`max` compare with
+`<`/`>` and both report false for `NaN`.
 
-The browser global is `__DSH_CHAT_WIDE_CONFIG__`. It is refreshed **per index render** under `dsh web`. Under
-`desktop-host` and `webworker-runtime` the index-injection table is captured once at boot, so the plugin must
-already be active there for the global to appear — with the plugin inactive the page simply falls back to the
-default width.
+The settings provider is optional. The Host reads it through `ctx.get('settings')` rather than declaring it
+as an injection, so a profile without it (for example `headless`) loads the plugin normally with the cordis
+`config` as the whole value — no crash, and no fiber parked on a service that will never arrive.
 
 ## Local build
 
@@ -64,8 +109,12 @@ pnpm run build     # tsc (host) + tsc declarations + tsdown (dynamic client bund
 
 Artifacts: `lib/index.js` (Host half, ESM, built by `tsc`) and `lib/client.js` (dynamic browser bundle, built
 by `tsdown`). The client bundle hands its factory to the shell's module loader —
-`window.__ModuleLoader__.load({ id: 'dsh-chat-wide', factory: (require) => { … } })` — and keeps React and its
-JSX runtimes external, because the loader owns those instances.
+`window.__ModuleLoader__.load({ id: 'dsh-chat-wide', factory: (require) => { … } })` — and keeps React, its
+JSX runtimes, and `@deepseek-ai/dsh-client-ui-primitives` external. Those are the client baseline rows
+(`PLATFORM_MODULES` in `packages/client/web/src/platform.ts`), seeded once by the shell: the page must reach
+that instance through the factory's `require`, because a second inlined copy would carry its own stylesheet
+and its own React-facing identity. `tsdown.config.ts` states the baseline list explicitly, since it is
+hand-rolled and cannot import `PLATFORM_MODULES` the way the in-repo client preset does.
 
 `test/client/client-bundle.spec.ts` reads the **built** `lib/client.js`, so run `pnpm run build:client` before
 `pnpm test` when the client sources changed.
@@ -127,26 +176,33 @@ resizing it while the plugin is active.
 Measured through stable attributes and computed styles (never visual inspection alone):
 
 ```bash
-# the injected global must be present in the served HTML before the browser step
+# the seed global must be present in the served HTML before the browser step
 curl -s http://127.0.0.1:3180/ | grep -o "__DSH_CHAT_WIDE_CONFIG__[^<]*"
+
+# the persisted user layer, after moving the Settings control
+grep -A2 'dsh-chat-wide' "${DSH_HOME:-$HOME/.dsh}/settings.yaml"
 
 # one owned style element per activation, and it disappears on unload
 # document.querySelectorAll("style[data-plugin='dsh-chat-wide']")
 ```
 
-Then compare, at two pane widths, the computed `max-width` of `[data-slot='main.conversation'] [data-chat-flow]`
-against the `.scroll` content width, and confirm the embedded conversation, composer, and user-bubble
-measurements match the pre-install baseline.
+Then move the *Transcript width* control and confirm the transcript follows **without a reload**, and that
+the value in `settings.yaml` matches. Compare, at two pane widths, the computed `max-width` of
+`[data-slot='main.conversation'] [data-chat-flow]` against the `.scroll` content width, and confirm the
+embedded conversation, composer, and user-bubble measurements match the pre-install baseline.
 
 ## Layout
 
 ```text
 src/
-  index.ts          Host half: Config schema re-export, index-inject row, apply()
-  config.ts         Dependency-free shared bounds, default, and coercion
+  index.ts          Host half: Config schema re-export, settings section wiring, index-inject row, apply()
+  config.ts         Dependency-free shared bounds, default, step, namespace, and coercion
   schema.ts         Host-only schemastery schema (kept out of the browser graph)
   client/
-    index.ts        Browser half: read the global, install the stylesheet
-    global.d.ts     Declaration for the injected global
-    styles.ts       Scoped rule generation, ownership attributes, disposer
+    index.ts        Browser half: bind the settings namespace, install the stylesheet, register the row
+    global.d.ts     Declaration for the first-paint seed global
+    styles.ts       Layered width resolution, scoped rule, ownership attributes, disposer
+    WidthRow.ts     General Settings row: numeric input, commit/clamp rules, write path
+    locales.ts      Locale entry point for the row's copy
+    locales/en.ts   Copy dictionaries (zh authoritative for the key set, en checked against it)
 ```
