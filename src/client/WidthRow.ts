@@ -80,22 +80,45 @@ export function parseWidthInput(raw: string): number | undefined {
   return Math.round(clamped * STEP_SCALE) / STEP_SCALE
 }
 
-const MUTED = 'var(--dsw-alias-label-secondary, #6b7280)'
-
 const styles = {
+  // Same cell rhythm as the in-tree General rows (`FontSizeRow`,
+  // `TranscriptViewRow`): 16px block padding, an 8px gap to the control, and a
+  // hairline separator that the section strips on its last child. Without the
+  // block padding the row sits flush against the row above it.
   row: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: '16px',
-    color: 'var(--dsw-alias-label-primary, #111827)',
+    gap: '8px',
+    padding: '16px 0',
+    borderBottom: '0.5px solid var(--dsw-alias-border-l2)',
   } satisfies CSSProperties,
-  text: { display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 } satisfies CSSProperties,
-  title: { fontWeight: 600 } satisfies CSSProperties,
-  description: { color: MUTED, fontSize: '12px', lineHeight: 1.5 } satisfies CSSProperties,
-  control: { display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 } satisfies CSSProperties,
+  text: {
+    flex: 1,
+    minWidth: 0,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    paddingRight: '48px',
+  } satisfies CSSProperties,
+  title: {
+    fontSize: '14px',
+    fontWeight: 400,
+    lineHeight: '22px',
+    color: 'var(--dsw-alias-label-primary)',
+  } satisfies CSSProperties,
+  description: {
+    fontSize: '12px',
+    fontWeight: 400,
+    lineHeight: '18px',
+    color: 'var(--dsw-alias-label-tertiary)',
+  } satisfies CSSProperties,
+  control: { display: 'inline-flex', alignItems: 'center', gap: '8px', flexShrink: 0 } satisfies CSSProperties,
   input: { width: '72px' } satisfies CSSProperties,
-  unit: { color: MUTED, fontSize: '12px' } satisfies CSSProperties,
+  unit: {
+    fontSize: '14px',
+    lineHeight: '22px',
+    color: 'var(--dsw-alias-label-secondary)',
+  } satisfies CSSProperties,
 } as const
 
 /**
