@@ -4,7 +4,7 @@
  * Built-artifact contract: `lib/client.js` must exist, hand its factory to the
  * shell's module loader with the package id, export only what cordis loading
  * needs, request nothing outside the shell's baseline module table, and install
- * the resolved rule when that `apply` runs.
+ * the resolved rules when that `apply` runs.
  *
  * The spec needs a built bundle, so `build:client` must have run first.
  */
@@ -201,7 +201,15 @@ describe('built Client apply', () => {
     ;(exports.apply as (ctx: Context) => void)(harness.ctx)
     harness.run()
 
-    expect(ownedStyle()!.textContent).toBe("[data-slot='main.conversation'] [data-chat-flow] {\n  max-width: 90%;\n}\n")
+    // The exact stylesheet text is `renderStylesheet`'s contract in the unit
+    // spec; here the built bundle only has to install the injected width plus
+    // the table rules around it.
+    const css = ownedStyle()!.textContent!
+    expect(css).toMatch(/^\[data-slot='main\.conversation'\] \[data-chat-flow\] \{\n  max-width: 90%;\n\}/)
+    expect(css).toContain("[data-slot='main.conversation'] [data-chat-flow] .md-table-wide {")
+    expect(css).toContain('overflow-x: auto;')
+    expect(css).toContain("[data-slot='main.conversation'] [data-chat-flow] table {")
+    expect(css).toContain('width: 100%;')
   })
 
   it('falls back to the documented default when the global is absent', () => {

@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  *
  * Client-half behaviour: the resolution order the width is read through, the
- * exact emitted rule, the ownership attributes on the style element, live
+ * exact emitted rules, the ownership attributes on the style element, live
  * re-render on a source change, singleton activation, and removal through the
  * effect disposer.
  */
@@ -19,8 +19,30 @@ import {
 } from '../../src/client/styles.ts'
 import { CONFIG_GLOBAL, DEFAULT_WIDTH_PERCENT, WIDTH_PERCENT_FIELD } from '../../src/config.ts'
 
-/** Exact rule the plugin owns, with the default width interpolated. */
-const EXPECTED_RULE = "[data-slot='main.conversation'] [data-chat-flow] {\n  max-width: 95%;\n}\n"
+/** Exact column rule, with the default width interpolated. */
+const EXPECTED_COLUMN_RULE = "[data-slot='main.conversation'] [data-chat-flow] {\n  max-width: 95%;\n}\n"
+
+/** Exact table rules, appended unchanged for every width. */
+const EXPECTED_TABLE_RULES = [
+  '',
+  "[data-slot='main.conversation'] [data-chat-flow] .md-table-wide {",
+  '  width: 100%;',
+  '  max-width: 100%;',
+  '  margin-left: 0;',
+  '  padding-left: 0;',
+  '  padding-bottom: 0;',
+  '  overflow-x: auto;',
+  '}',
+  '',
+  "[data-slot='main.conversation'] [data-chat-flow] table {",
+  '  width: 100%;',
+  '  max-width: none;',
+  '}',
+  '',
+].join('\n')
+
+/** Exact stylesheet the plugin owns, with the default width interpolated. */
+const EXPECTED_RULE = EXPECTED_COLUMN_RULE + EXPECTED_TABLE_RULES
 
 const STYLE_SELECTOR = "style[data-plugin='dsh-chat-wide']"
 
@@ -140,27 +162,60 @@ describe('resolveWidth', () => {
 })
 
 describe('renderStylesheet', () => {
-  it('emits exactly one rule for the main transcript column', () => {
+  it('emits the column rule followed by the table rules', () => {
     expect(renderStylesheet(DEFAULT_WIDTH_PERCENT)).toBe(EXPECTED_RULE)
   })
 
-  it('pins max-width only, leaving the shared width custom properties alone', () => {
+  it('pins the transcript column with max-width only', () => {
     const css = renderStylesheet(95)
-    expect(css).toContain('max-width: 95%')
+    const [columnRule] = css.split('\n\n')
+    expect(columnRule).toBe("[data-slot='main.conversation'] [data-chat-flow] {\n  max-width: 95%;\n}")
     // The transcript-only boundary: these axes also drive the composer, the user
     // bubble, auxiliary panels, and the width-handle geometry.
     expect(css).not.toContain('--dsh-chat-content-width')
     expect(css).not.toContain('--dsh-chat-user-width')
-    // Specificity (0,2,0) already beats the core `.column` rule (0,1,0).
     expect(css).not.toContain('!important')
-    // Core owns `width: 100%`; declaring it again would fight the flex column.
-    expect(css).not.toMatch(/(^|\s)width:/)
+    // Core owns `width: 100%` on the column; declaring it again would fight the
+    // flex column. Only the table rules declare a width.
+    expect(columnRule).not.toMatch(/(^|\s)width:/)
   })
 
-  it('interpolates the validated number for any accepted width', () => {
+  it('fills every table to the transcript column', () => {
+    const css = renderStylesheet(95)
+    const tableRule = css.slice(
+      css.indexOf("[data-slot='main.conversation'] [data-chat-flow] table {"),
+    )
+    expect(tableRule).toContain('width: 100%;')
+    expect(tableRule).toContain('max-width: none;')
+  })
+
+  it('replaces the wide-table breakout with an in-column horizontal scroll', () => {
+    const css = renderStylesheet(95)
+    const wideRule = css.slice(
+      css.indexOf("[data-slot='main.conversation'] [data-chat-flow] .md-table-wide {"),
+      css.indexOf("[data-slot='main.conversation'] [data-chat-flow] table {"),
+    )
+    // Core's breakout sizes the wrapper with `calc(100% + lead + spare)` and a
+    // negative `margin-left` derived from the shared width axis. Both are reset
+    // so the pinned column can no longer be pushed sideways.
+    expect(wideRule).not.toContain('calc(')
+    expect(wideRule).toContain('width: 100%;')
+    expect(wideRule).toContain('max-width: 100%;')
+    expect(wideRule).toContain('margin-left: 0;')
+    expect(wideRule).toContain('padding-left: 0;')
+    // Core rests wide tables on `overflow-x: hidden` and reveals the bar only on
+    // hover or keyboard focus; the pinned column needs the scrollbar whenever a
+    // table cannot fit.
+    expect(wideRule).toContain('overflow-x: auto;')
+  })
+
+  it('interpolates the validated number into the column rule only', () => {
     expect(renderStylesheet(100)).toContain('max-width: 100%')
     expect(renderStylesheet(12.5)).toContain('max-width: 12.5%')
     expect(renderStylesheet(1)).toContain('max-width: 1%')
+    // The table rules are width-independent.
+    expect(renderStylesheet(1).endsWith(EXPECTED_TABLE_RULES)).toBe(true)
+    expect(renderStylesheet(100).endsWith(EXPECTED_TABLE_RULES)).toBe(true)
   })
 })
 

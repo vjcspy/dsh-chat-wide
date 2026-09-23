@@ -1,15 +1,31 @@
 /**
- * Scoped stylesheet that pins the main transcript column to the resolved width.
+ * Scoped stylesheet that pins the main transcript column to the resolved width
+ * and normalizes the markdown tables rendered inside it.
  *
- * The rule targets the Slot Renderer's `main.conversation` anchor plus the
+ * Every rule targets the Slot Renderer's `main.conversation` anchor plus the
  * transcript's own `data-chat-flow` marker, so the embedded sidebar conversation
- * (a sibling region with no `main.conversation` ancestor) can never match it.
- * Specificity (0,2,0) beats the core `.column` rule's (0,1,0), so no
- * `!important` is needed and stylesheet order does not matter.
+ * (a sibling region with no `main.conversation` ancestor) can never match one.
+ * No rule needs `!important`: the column rule's (0,2,0) beats the core `.column`
+ * rule's (0,1,0), the wide-wrapper rule's (0,3,0) beats core's base breakout
+ * (0,2,0), and the table rule's (0,2,1) beats core's `.tableScroll table` and
+ * `.tableFill table` (0,1,1). Core's `:hover` / `:focus-visible` reveal ties the
+ * wide-wrapper rule at (0,3,0), where either winner still scrolls the table.
  *
- * Only `max-width` is declared. Core already owns `width: 100%` on the column,
- * and `--dsh-chat-content-width` / `--dsh-chat-user-width` stay untouched
- * because the composer, user bubble, and auxiliary panels share those axes.
+ * The column rule declares `max-width` only. Core already owns `width: 100%` on
+ * the column, and `--dsh-chat-content-width` / `--dsh-chat-user-width` stay
+ * untouched because the composer, user bubble, and auxiliary panels share those
+ * axes.
+ *
+ * The two table rules compensate for core geometry that assumes the transcript
+ * is still on the shared width axis. Core's `md-table-wide` breakout sizes
+ * itself from the gutters around `--dsh-chat-content-width`, so on the pinned,
+ * nearly full-bleed column its lead offset resolves negative: `margin-left`
+ * shifts the wrapper right while the negative `padding-left` is dropped as an
+ * invalid computed value, painting a sideways shift and a right-edge overflow
+ * instead of a scroll. Narrowing the wrapper back to the column and restoring
+ * `overflow-x: auto` keeps the wide table inside the transcript with its own
+ * scrollbar, and `width: 100%` fills every table — multi-column and two-column
+ * alike — to the column before any overflow is considered.
  *
  * The width is resolved from layered sources and re-resolved on every change, so
  * a Settings write moves the transcript without a page reload.
@@ -29,6 +45,9 @@ const MAIN_SLOT = "[data-slot='main.conversation']"
 
 /** Stable transcript marker emitted by the core chat column. */
 const CHAT_FLOW = '[data-chat-flow]'
+
+/** Stable hook the core markdown renderer puts on the wrapper of a 4+ column table. */
+const WIDE_TABLE = '.md-table-wide'
 
 /** Stylesheet identity reported through the owned style element's `data-plugin-css`. */
 const STYLE_ID = `${PLUGIN_ID}/transcript-width`
@@ -76,12 +95,31 @@ export function resolveWidth(section: unknown): number {
 }
 
 /**
- * Render the single rule this plugin owns.
+ * Render the single stylesheet this plugin owns.
  * @param widthPercent - Validated width, interpolated as a number only.
- * @returns Stylesheet text for the main transcript column.
+ * @returns Stylesheet text for the main transcript column and its tables.
  */
 export function renderStylesheet(widthPercent: number): string {
-  return `${MAIN_SLOT} ${CHAT_FLOW} {\n  max-width: ${widthPercent}%;\n}\n`
+  return [
+    `${MAIN_SLOT} ${CHAT_FLOW} {`,
+    `  max-width: ${widthPercent}%;`,
+    '}',
+    '',
+    `${MAIN_SLOT} ${CHAT_FLOW} ${WIDE_TABLE} {`,
+    '  width: 100%;',
+    '  max-width: 100%;',
+    '  margin-left: 0;',
+    '  padding-left: 0;',
+    '  padding-bottom: 0;',
+    '  overflow-x: auto;',
+    '}',
+    '',
+    `${MAIN_SLOT} ${CHAT_FLOW} table {`,
+    '  width: 100%;',
+    '  max-width: none;',
+    '}',
+    '',
+  ].join('\n')
 }
 
 /**

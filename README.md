@@ -8,7 +8,10 @@ The width is adjustable at runtime from **Settings → General → Transcript wi
 reload, and is persisted so it survives a restart. The cordis plugin `config` remains available as a seed
 layer for a deployment that wants a different starting point.
 
-Nothing in `deepseek-harness` changes: the plugin overrides one `max-width` declaration through a
+It also normalizes the markdown **tables** rendered in that transcript: every table fills the column, and a
+table too wide to fit scrolls inside the column instead of overflowing the pane.
+
+Nothing in `deepseek-harness` changes: the plugin overrides a handful of declarations through one
 lifecycle-owned stylesheet.
 
 ## What it changes
@@ -17,17 +20,50 @@ lifecycle-owned stylesheet.
 [data-slot='main.conversation'] [data-chat-flow] {
   max-width: 95%;
 }
+
+[data-slot='main.conversation'] [data-chat-flow] .md-table-wide {
+  width: 100%;
+  max-width: 100%;
+  margin-left: 0;
+  padding-left: 0;
+  padding-bottom: 0;
+  overflow-x: auto;
+}
+
+[data-slot='main.conversation'] [data-chat-flow] table {
+  width: 100%;
+  max-width: none;
+}
 ```
 
 * `[data-slot='main.conversation']` is the Slot Renderer's documented layout-neutral anchor for the main
   conversation route. The embedded sidebar chat is a sibling region and can never have that ancestor, so it
-  cannot match this rule.
+  cannot match these rules.
 * `[data-chat-flow]` is the core transcript column marker.
-* Specificity is (0,2,0) against the core `.column` rule's (0,1,0), so the override wins regardless of
-  stylesheet order and needs no `!important`.
-* Only `max-width` is declared — core already owns `width: 100%` on that element, and
+* The column rule's specificity is (0,2,0) against the core `.column` rule's (0,1,0), so the override wins
+  regardless of stylesheet order and needs no `!important`. The table rules are (0,3,0) and (0,2,1), above
+  core's `.tableScroll` / `.tableFill` rules — no `!important` anywhere.
+* The column rule declares `max-width` only — core already owns `width: 100%` on that element, and
   `--dsh-chat-content-width` / `--dsh-chat-user-width` are deliberately left untouched because the composer,
   the user bubble, auxiliary panels, and the width-handle geometry all read those axes.
+
+### Tables
+
+Every markdown table in the main transcript fills the column, two- and three-column tables included. A table
+whose minimum content width still exceeds the column keeps that width and scrolls horizontally inside its
+wrapper, so a wide table cannot push the transcript sideways.
+
+The `.md-table-wide` rule also resets core's wide-table breakout. Core sizes that wrapper from the gutters
+around `--dsh-chat-content-width` — `--dsh-table-spare: max(0px, calc((100cqw - var(--dsh-chat-content-width)) / 2))`
+and `--dsh-table-lead: calc(var(--dsh-table-spare) + min(var(--dsh-chat-content-width), 100cqw) - 100%)`
+(`packages/client/ui-chat/src/client/chat/AssistantMarkdown.module.css:33-43`). On the pinned, nearly
+full-bleed column those gutters are near zero, so the lead resolves negative: `margin-left` is then positive
+while the negative `padding-left` is dropped as an invalid computed value, which shifts the wrapper right and
+overflows the pane's right edge instead of scrolling. Pinning the wrapper back to the column removes that
+mismatch, and `overflow-x: auto` replaces core's hover-only reveal (the wrapper rests at `overflow-x: hidden`)
+with a bar that is present whenever the table cannot fit.
+
+The embedded sidebar chat keeps core table behaviour: these rules require a `main.conversation` ancestor.
 
 ## Configuration
 
@@ -168,8 +204,9 @@ right panel.
 ## Model Experience
 
 The plugin adds no tool, prompt, or context surface. Its only model-visible effect is layout: the transcript
-column renders at the configured percentage of the conversation scroll box, and the width handle stops
-resizing it while the plugin is active.
+column renders at the configured percentage of the conversation scroll box, its markdown tables fill that
+column and scroll in place when they cannot fit, and the width handle stops resizing it while the plugin is
+active.
 
 ## Verification
 
