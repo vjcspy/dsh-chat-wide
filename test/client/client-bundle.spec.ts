@@ -125,8 +125,8 @@ function createContext(section: unknown): ApplyHarness {
       bodies.push(body)
       return () => {}
     },
-    settingsScope: {
-      bind: () => ({
+    configForms: {
+      get: () => ({
         getSnapshot: () => snapshot,
         subscribe: () => () => {},
         set: () => Promise.resolve(),
@@ -171,7 +171,7 @@ describe('built Client bundle', () => {
   it('exports only what cordis loading needs', () => {
     expect(Object.keys(exports).sort()).toEqual(['apply', 'inject'])
     expect(typeof exports.apply).toBe('function')
-    expect(exports.inject).toEqual(['slots', 'settingsScope', 'locale'])
+    expect(exports.inject).toEqual(['slots', 'configForms', 'locale'])
   })
 
   it('exposes the Host apply entry as a separate artifact', () => {

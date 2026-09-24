@@ -21,16 +21,18 @@ import {
 } from '../../src/config.ts'
 
 /**
- * Run the schema over a hostile input.
+ * Run the schema over a hostile input and unwrap the live reference.
  *
  * The schema accepts `unknown` at runtime — that is the point of validating
  * operator configuration — so the cases below deliberately pass values the
- * inferred input type forbids.
+ * inferred input type forbids. `widthPercent` is volatile, so the parsed value
+ * is a reference the Loader keeps live; these cases assert the value it resolves.
  * @param value - Candidate configuration.
  * @returns The resolved configuration, or whatever the schema throws.
  */
 function parse(value: unknown): ConfigShape {
-  return (Config as unknown as (input: unknown) => ConfigShape)(value)
+  const resolved = (Config as unknown as (input: unknown) => { widthPercent: { get(): number } })(value)
+  return { widthPercent: resolved.widthPercent.get() }
 }
 
 describe('plugin identity', () => {

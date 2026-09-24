@@ -16,7 +16,7 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: pulls the `ctx.slots` service merge.
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: pulls the `settings.general.item` slot declaration, the
-// `ctx.settingsScope` service merge, and the settings scope contracts.
+// `ctx.configForms` service merge, and the shared configuration-form contracts.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 // Type-only: pulls the `ctx.locale` service merge whose active locale selects
 // the dictionary the row binds.
@@ -31,16 +31,16 @@ import { installStyles, resolveWidth } from './styles.ts'
 export type { WidthRowInjected, WidthRowProps } from './WidthRow.ts'
 
 /** Services this half reads; all three are shell-provided. */
-export const inject = ['slots', 'settingsScope', 'locale']
+export const inject = ['slots', 'configForms', 'locale']
 
 /**
  * Apply the resolved transcript width live, and contribute the Settings row.
  * @param ctx - Browser-side plugin context owning the stylesheet effect.
  */
 export function apply(ctx: ClientContext): void {
-  const scope = ctx.settingsScope.bind<Config>({ namespace: SETTINGS_NAMESPACE })
-  const read = (): number => resolveWidth(scope.getSnapshot().value)
-  installStyles(ctx, read, listener => scope.subscribe(listener))
+  const form = ctx.configForms.get<Config>(SETTINGS_NAMESPACE)
+  const read = (): number => resolveWidth(form.getSnapshot().value)
+  installStyles(ctx, read, listener => form.subscribe(listener))
 
   const copy = bind(ctx.locale.getSnapshot().active === 'zh' ? zh : en)
   // Built once, not per `inject()` call: the renderer caches each hook binding
@@ -48,13 +48,13 @@ export function apply(ctx: ClientContext): void {
   // down and re-add it on each pass of the same render loop.
   const widthSource: ObservableSnapshot<number> = {
     getSnapshot: read,
-    subscribe: listener => scope.subscribe(listener),
+    subscribe: listener => form.subscribe(listener),
   }
   const face: WidthRowInjected = {
     hooks: { widthPercent: widthSource },
     // A refused write needs no local handling: the displayed value follows the
     // settings snapshot, so a rejection simply leaves the previous width in place.
-    setWidthPercent: (percent) => { void scope.set(WIDTH_PERCENT_FIELD, percent) },
+    setWidthPercent: (percent) => { void form.set(WIDTH_PERCENT_FIELD, percent) },
     copy,
   }
   // `inject` waits for the General section to declare the slot, so this

@@ -124,9 +124,9 @@ function createContext(scope: unknown): ClientHarness {
       bodies.push(body)
       return () => {}
     },
-    settingsScope: {
-      bind: (spec: { namespace: string }) => {
-        bound.push(spec)
+    configForms: {
+      get: (namespace: string) => {
+        bound.push({ namespace })
         return scope
       },
     },
@@ -177,7 +177,7 @@ afterEach(() => {
 
 describe('browser half wiring', () => {
   it('declares the shell services it reads, and never a host-only one', () => {
-    expect(inject).toEqual(['slots', 'settingsScope', 'locale'])
+    expect(inject).toEqual(['slots', 'configForms', 'locale'])
   })
 
   it('binds the plugin settings namespace', () => {
